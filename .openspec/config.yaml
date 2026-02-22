@@ -1,0 +1,35 @@
+# OpenSpec Configuration
+
+## AI Assistants
+ai_assistants:
+  - name: Claude
+    identifier: claude
+  - name: OpenCode
+    identifier: opencode
+  - name: Cursor
+    identifier: cursor
+  - name: Windsurf
+    identifier: windsurf
+  - name: VS Code
+    identifier: vscode
+
+## Directories
+directories:
+  specs: specs
+  changes: .openspec/changes
+  proposals: .openspec/proposals
+
+## Extensions
+file_extensions:
+  - .ts
+  - .tsx
+  - .js
+  - .jsx
+  - .json
+
+## Ignore Patterns
+ignore_patterns:
+  - node_modules/
+  - dist/
+  - .git/
+  - "*.log"
