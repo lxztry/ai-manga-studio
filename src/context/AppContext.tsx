@@ -221,27 +221,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCharacter = useCallback((characterData?: Partial<Character>) => {
     setState(prev => {
       const newCharacter = createCharacter(characterData)
+      const updatedCharacters = [...prev.characters, newCharacter]
+      
+      if (!prev.currentScript) {
+        return {
+          ...prev,
+          characters: updatedCharacters,
+        }
+      }
+      
+      const updatedScript = {
+        ...prev.currentScript,
+        characters: updatedCharacters,
+        updatedAt: new Date(),
+      }
+      
       return {
         ...prev,
-        characters: [...prev.characters, newCharacter],
+        characters: updatedCharacters,
+        currentScript: updatedScript,
+        scripts: prev.scripts.map(s =>
+          s.id === updatedScript.id ? updatedScript : s
+        ),
       }
     })
   }, [])
 
   const updateCharacter = useCallback((characterId: string, updates: Partial<Character>) => {
-    setState(prev => ({
-      ...prev,
-      characters: prev.characters.map(char =>
+    setState(prev => {
+      const updatedCharacters = prev.characters.map(char =>
         char.id === characterId ? { ...char, ...updates, updatedAt: new Date() } : char
-      ),
-    }))
+      )
+      
+      if (!prev.currentScript) {
+        return {
+          ...prev,
+          characters: updatedCharacters,
+        }
+      }
+      
+      const updatedScript = {
+        ...prev.currentScript,
+        characters: updatedCharacters,
+        updatedAt: new Date(),
+      }
+      
+      return {
+        ...prev,
+        characters: updatedCharacters,
+        currentScript: updatedScript,
+        scripts: prev.scripts.map(s =>
+          s.id === updatedScript.id ? updatedScript : s
+        ),
+      }
+    })
   }, [])
 
   const deleteCharacter = useCallback((characterId: string) => {
-    setState(prev => ({
-      ...prev,
-      characters: prev.characters.filter(c => c.id !== characterId),
-    }))
+    setState(prev => {
+      const updatedCharacters = prev.characters.filter(c => c.id !== characterId)
+      
+      if (!prev.currentScript) {
+        return {
+          ...prev,
+          characters: updatedCharacters,
+        }
+      }
+      
+      const updatedScript = {
+        ...prev.currentScript,
+        characters: updatedCharacters,
+        updatedAt: new Date(),
+      }
+      
+      return {
+        ...prev,
+        characters: updatedCharacters,
+        currentScript: updatedScript,
+        scripts: prev.scripts.map(s =>
+          s.id === updatedScript.id ? updatedScript : s
+        ),
+      }
+    })
   }, [])
 
   const setCurrentScene = useCallback((scene: Scene | null) => {
