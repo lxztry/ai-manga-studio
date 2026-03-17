@@ -36,6 +36,7 @@
 - Character library
 
 ### 3.3 Storyboard Editor
+- Script/Scene selection dropdown
 - Drag-and-drop panel reordering
 - Scene association
 - Batch image upload

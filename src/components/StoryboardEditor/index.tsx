@@ -24,7 +24,12 @@ export function StoryboardEditor() {
   } = useApp()
   const [selectedPanel, setSelectedPanel] = useState<string | null>(null)
   const [generatingPanelId, setGeneratingPanelId] = useState<string | null>(null)
+  const [selectedSceneId, setSelectedSceneId] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const filteredPanels = selectedSceneId
+    ? storyboard?.panels.filter(p => p.sceneId === selectedSceneId) || []
+    : storyboard?.panels || []
 
   const handleAddPanel = () => {
     addStoryboardPanel({
@@ -102,7 +107,7 @@ export function StoryboardEditor() {
       return
     }
 
-    const panelsWithoutImage = storyboard?.panels.filter(p => !p.imageUrl && p.description) || []
+    const panelsWithoutImage = filteredPanels.filter(p => !p.imageUrl && p.description)
     if (panelsWithoutImage.length === 0) {
       alert('没有需要生成图像的分镜（需要有画面描述且未上传图片）')
       return
@@ -183,7 +188,21 @@ export function StoryboardEditor() {
   return (
     <div className="panel p-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">分镜编辑</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-bold">分镜编辑</h2>
+          {currentScript && currentScript.scenes.length > 0 && (
+            <select
+              className="select"
+              value={selectedSceneId}
+              onChange={(e) => setSelectedSceneId(e.target.value)}
+            >
+              <option value="">全部场景</option>
+              {currentScript.scenes.map((scene) => (
+                <option key={scene.id} value={scene.id}>{scene.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="flex gap-2">
           {currentScript && currentScript.scenes.length > 0 && (
             <button
@@ -205,7 +224,7 @@ export function StoryboardEditor() {
               从场景生成
             </button>
           )}
-          {storyboard && storyboard.panels.some(p => !p.imageUrl && p.description) && (
+          {filteredPanels.some(p => !p.imageUrl && p.description) && (
             <button
               onClick={handleBatchGenerateImages}
               disabled={!!generatingPanelId}
@@ -253,7 +272,7 @@ export function StoryboardEditor() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {storyboard.panels.map((panel, index) => (
+        {filteredPanels.map((panel, index) => (
           <div
             key={panel.id}
             className={`storyboard-panel ${selectedPanel === panel.id ? 'storyboard-panel-selected' : ''}`}
@@ -370,10 +389,10 @@ export function StoryboardEditor() {
           </div>
         ))}
 
-        {storyboard.panels.length === 0 && (
+        {filteredPanels.length === 0 && (
           <div className="col-span-full text-center py-12 text-slate-400">
             <Grid size={48} className="mx-auto mb-2 opacity-50" />
-            <p>还没有分镜，点击上方按钮添加</p>
+            <p>{selectedSceneId ? '该场景暂无分镜' : '还没有分镜，点击上方按钮添加'}</p>
             <p className="text-sm mt-1">或点击"批量导入"一次导入多张图片</p>
           </div>
         )}

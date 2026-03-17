@@ -1,3 +1,10 @@
+export interface CharacterReferenceImage {
+  id: string
+  url: string
+  type: 'front' | 'side' | 'full-body' | 'action' | 'other'
+  description: string
+}
+
 export interface Character {
   id: string
   name: string
@@ -6,6 +13,9 @@ export interface Character {
   personality: string
   avatar?: string
   traits: string[]
+  referenceImages: CharacterReferenceImage[]
+  appearanceNotes: string
+  clothingNotes: string
   createdAt: Date
   updatedAt: Date
 }

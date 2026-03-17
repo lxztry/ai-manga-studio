@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
-import { Plus, FileText, Trash2, ChevronRight, Sparkles, X, AlertCircle, Wand2, Upload } from 'lucide-react'
+import { Plus, FileText, Trash2, ChevronRight, Sparkles, X, AlertCircle, Wand2, Upload, Users } from 'lucide-react'
 import type { Scene, Dialogue } from '../../types'
-import { generateScript, optimizeVideoPrompt, importTextToScript } from '../../utils/ai'
+import { generateScript, optimizeVideoPrompt, importTextToScript, extractCharactersFromScript, type ExtractedCharacter } from '../../utils/ai'
 
 const GENRES = ['冒险', '爱情', '科幻', '奇幻', '悬疑', '喜剧', '动作', '恐怖']
 
@@ -20,6 +20,7 @@ export function ScriptEditor() {
     updateScene,
     deleteScene,
     setCurrentScene,
+    addCharacter,
   } = useApp()
   const [isGenerating, setIsGenerating] = useState(false)
   const [showAIGenerator, setShowAIGenerator] = useState(false)
@@ -33,6 +34,51 @@ export function ScriptEditor() {
   const [showImportText, setShowImportText] = useState(false)
   const [importText, setImportText] = useState('')
   const [isImporting, setIsImporting] = useState(false)
+  const [showExtractCharacters, setShowExtractCharacters] = useState(false)
+  const [extractedCharacters, setExtractedCharacters] = useState<ExtractedCharacter[]>([])
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
+
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+  const handleExtractCharacters = async (retryCount = 0) => {
+    if (!currentScript?.scenes.length) {
+      alert('当前剧本没有场景')
+      return
+    }
+    if (!apiKey) {
+      alert('请先在设置中配置API密钥')
+      return
+    }
+
+    setIsExtracting(true)
+    setExtractError(null)
+
+    try {
+      const chars = await extractCharactersFromScript(
+        currentScript.title,
+        currentScript.scenes,
+        { apiKey, provider: apiProvider, model: apiModel, baseUrl: apiBaseUrl }
+      )
+      setExtractedCharacters(chars)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '提取失败'
+      
+      if (errorMsg.includes('过于频繁') || errorMsg.includes('429') || errorMsg.includes('rate limit')) {
+        if (retryCount < 2) {
+          const waitTime = (retryCount + 1) * 3000
+          setExtractError(`请求受限，${waitTime/1000}秒后自动重试...`)
+          await sleep(waitTime)
+          return handleExtractCharacters(retryCount + 1)
+        }
+        setExtractError('请求次数已达上限，请30秒后再试')
+      } else {
+        setExtractError(errorMsg)
+      }
+    } finally {
+      setIsExtracting(false)
+    }
+  }
 
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return
@@ -231,6 +277,13 @@ export function ScriptEditor() {
             <Wand2 size={18} />
             优化视频提示词
           </button>
+          <button
+            onClick={() => setShowExtractCharacters(true)}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <Users size={18} />
+            提取角色
+          </button>
           <button onClick={handleAddScene} className="btn btn-primary flex items-center gap-2">
             <Plus size={18} />
             添加场景
@@ -338,6 +391,144 @@ export function ScriptEditor() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showExtractCharacters && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="card w-full max-w-3xl max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Users size={20} />
+                从剧本提取角色
+              </h3>
+              <button onClick={() => { setShowExtractCharacters(false); setExtractError(null); setExtractedCharacters([]) }} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            
+            {!extractedCharacters.length && !isExtracting && (
+              <div className="text-center py-8">
+                <p className="text-slate-400 mb-4">AI将从当前剧本的场景和对话中自动提取角色信息</p>
+                {extractError && (
+                  <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-700 rounded-lg text-yellow-400 text-sm">
+                    {extractError}
+                  </div>
+                )}
+                <button
+                  onClick={() => handleExtractCharacters()}
+                  disabled={isExtracting}
+                  className="btn btn-primary disabled:opacity-50"
+                >
+                  {isExtracting ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full inline mr-2" />
+                      提取中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} className="inline mr-2" />
+                      开始提取
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {isExtracting && (
+              <div className="text-center py-8">
+                <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full mx-auto mb-2" />
+                <p className="text-slate-400">正在分析剧本提取角色...</p>
+              </div>
+            )}
+
+            {extractedCharacters.length > 0 && (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-400">已提取 {extractedCharacters.length} 个角色，可以修改后添加到角色库</p>
+                
+                <div className="max-h-60 overflow-y-auto space-y-3">
+                  {extractedCharacters.map((char, index) => (
+                    <div key={index} className="p-3 bg-slate-800 rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <input
+                          type="text"
+                          value={char.name}
+                          onChange={(e) => {
+                            const updated = [...extractedCharacters]
+                            updated[index].name = e.target.value
+                            setExtractedCharacters(updated)
+                          }}
+                          className="input flex-1 mr-2"
+                          placeholder="角色名"
+                        />
+                        <button
+                          onClick={() => {
+                            const updated = extractedCharacters.filter((_, i) => i !== index)
+                            setExtractedCharacters(updated)
+                          }}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={char.appearance}
+                          onChange={(e) => {
+                            const updated = [...extractedCharacters]
+                            updated[index].appearance = e.target.value
+                            setExtractedCharacters(updated)
+                          }}
+                          className="input text-sm"
+                          placeholder="外貌描述"
+                        />
+                        <input
+                          type="text"
+                          value={char.personality}
+                          onChange={(e) => {
+                            const updated = [...extractedCharacters]
+                            updated[index].personality = e.target.value
+                            setExtractedCharacters(updated)
+                          }}
+                          className="input text-sm"
+                          placeholder="性格特点"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      extractedCharacters.forEach(char => {
+                        addCharacter({
+                          name: char.name,
+                          description: char.description,
+                          appearance: char.appearance,
+                          personality: char.personality,
+                          traits: char.traits,
+                        })
+                      })
+                      alert(`已添加 ${extractedCharacters.length} 个角色到角色库`)
+                      setShowExtractCharacters(false)
+                      setExtractedCharacters([])
+                    }}
+                    className="btn btn-primary flex-1"
+                  >
+                    全部添加到角色库
+                  </button>
+                  <button
+                    onClick={() => setExtractedCharacters([])}
+                    className="btn btn-secondary"
+                  >
+                    重新提取
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

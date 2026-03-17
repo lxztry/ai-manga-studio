@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
-import { Image, Sparkles, Download, RefreshCw, AlertCircle, Upload, X } from 'lucide-react'
+import { Image, Sparkles, Download, RefreshCw, AlertCircle } from 'lucide-react'
 
 const IMAGE_STYLES = [
   { value: 'manga', label: '日式漫画', prompt: 'Japanese manga style, black and white with screentones' },
@@ -85,12 +85,17 @@ export function ImageGenerator() {
   const [style, setStyle] = useState('manga')
   const [artStyle, setArtStyle] = useState('none')
   const [cameraAngle, setCameraAngle] = useState('medium')
-  const [selectedCharacters, setSelectedCharacters] = useState<string[]>([])
-  const [characterReference, setCharacterReference] = useState<string | null>(null)
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imageProvider, setImageProvider] = useState('siliconflow')
+
+  const selectedCharacter = characters.find(c => c.id === selectedCharacterId)
+
+  const toggleCharacter = (characterId: string) => {
+    setSelectedCharacterId(prev => prev === characterId ? null : characterId)
+  }
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -108,9 +113,12 @@ export function ImageGenerator() {
     setError(null)
 
     try {
-      const characterDescriptions = characters
-        .filter(c => selectedCharacters.includes(c.id))
-        .map(c => `${c.name}: ${c.appearance}`)
+      const selectedChar = characters.find(c => c.id === selectedCharacterId)
+      const characterDescriptions = selectedChar 
+        ? [`${selectedChar.name}: ${selectedChar.appearance}`]
+        : []
+      
+      const charClothingNotes = selectedChar?.clothingNotes || ''
 
       const fullPrompt = buildPrompt(
         prompt, 
@@ -118,7 +126,8 @@ export function ImageGenerator() {
         style, 
         cameraAngle,
         artStyle,
-        characterReference || undefined
+        selectedChar?.referenceImages[0]?.url,
+        charClothingNotes
       )
       
       let imageUrl: string | null = null
@@ -402,7 +411,8 @@ export function ImageGenerator() {
     style: string,
     angle: string,
     artStyle: string = 'none',
-    characterRef?: string
+    characterRef?: string,
+    clothingNotes?: string
   ): string => {
     const styleDescriptions: Record<string, string> = {
       manga: 'Japanese manga style, black and white with screentones, dynamic lines, expressive characters',
@@ -442,7 +452,11 @@ export function ImageGenerator() {
     }
 
     if (characterRef) {
-      fullPrompt += `. Same character appearance as reference image`
+      fullPrompt += `. Same character appearance as reference image: ${characterRef}`
+    }
+    
+    if (clothingNotes) {
+      fullPrompt += `. Clothing: ${clothingNotes}`
     }
 
     fullPrompt += `. Style: ${styleDescriptions[style] || styleDescriptions.manga}`
@@ -480,14 +494,6 @@ export function ImageGenerator() {
     if (lastPanel) {
       updateStoryboardPanel(lastPanel.id, { imageUrl: generatedImage })
     }
-  }
-
-  const toggleCharacter = (characterId: string) => {
-    setSelectedCharacters(prev =>
-      prev.includes(characterId)
-        ? prev.filter(id => id !== characterId)
-        : [...prev, characterId]
-    )
   }
 
   const currentProvider = IMAGE_PROVIDERS.find(p => p.id === imageProvider)
@@ -533,25 +539,41 @@ export function ImageGenerator() {
           </div>
 
           <div>
-            <label className="label">选择角色</label>
+            <label className="label">选择角色 (保持一致性)</label>
             <div className="flex flex-wrap gap-2">
               {characters.map((char) => (
                 <button
                   key={char.id}
                   onClick={() => toggleCharacter(char.id)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    selectedCharacters.includes(char.id)
+                  className={`px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-2 ${
+                    selectedCharacterId === char.id
                       ? 'bg-primary-600 text-white'
                       : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                   }`}
                 >
+                  {char.avatar && <img src={char.avatar} alt="" className="w-4 h-4 rounded-full object-cover" />}
                   {char.name}
+                  {char.referenceImages.length > 0 && (
+                    <span className="text-xs opacity-70">({char.referenceImages.length}图)</span>
+                  )}
                 </button>
               ))}
               {characters.length === 0 && (
                 <span className="text-slate-500 text-sm">请先在角色管理中添加角色</span>
               )}
             </div>
+            {selectedCharacter && selectedCharacter.referenceImages.length > 0 && (
+              <div className="mt-2 flex gap-1">
+                {selectedCharacter.referenceImages.slice(0, 4).map((ref) => (
+                  <img 
+                    key={ref.id}
+                    src={ref.url} 
+                    alt={ref.type}
+                    className="w-8 h-8 rounded object-cover border border-slate-500"
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -593,40 +615,6 @@ export function ImageGenerator() {
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="label">角色参考图</label>
-              {characterReference ? (
-                <div className="relative">
-                  <img src={characterReference} alt="角色参考" className="w-full h-24 object-cover rounded" />
-                  <button
-                    onClick={() => setCharacterReference(null)}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
-                <label className="btn btn-secondary w-full flex items-center justify-center gap-2 cursor-pointer">
-                  <Upload size={16} />
-                  上传参考图
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const reader = new FileReader()
-                        reader.onload = (ev) => {
-                          setCharacterReference(ev.target?.result as string)
-                        }
-                        reader.readAsDataURL(file)
-                      }
-                    }}
-                  />
-                </label>
-              )}
             </div>
           </div>
 

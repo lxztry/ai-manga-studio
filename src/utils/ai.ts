@@ -1,4 +1,4 @@
-import type { Script, Character, Dialogue } from '../types'
+import type { Script, Character, Dialogue, Scene } from '../types'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
@@ -330,6 +330,57 @@ ${text.slice(0, 5000)}`
     return result
   } catch (error) {
     console.error('导入文本失败:', error)
+    throw error
+  }
+}
+
+export interface ExtractedCharacter {
+  name: string
+  description: string
+  appearance: string
+  personality: string
+  traits: string[]
+}
+
+export async function extractCharactersFromScript(
+  scriptTitle: string,
+  scenes: Scene[],
+  config: AIConfig
+): Promise<ExtractedCharacter[]> {
+  const scenesText = scenes.map((scene, index) => {
+    const dialogues = scene.dialogues.map(d => `【${d.characterId || '未知'}】: ${d.content}`).join('\n')
+    return `场景${index + 1}: ${scene.name}\n地点: ${scene.location}\n对话:\n${dialogues}`
+  }).join('\n\n')
+
+  const systemPrompt = `你是一个专业的漫画角色设计师。从剧本中分析并提取角色信息。`
+
+  const userPrompt = `请从以下剧本中提取所有出现的角色，并生成角色信息。返回纯JSON格式数组（不要包含markdown代码块标记），每个角色包含：
+- name: 角色名称
+- description: 角色简介
+- appearance: 外貌描述（用于AI绘图）
+- personality: 性格特点
+- traits: 特征标签数组（如["勇敢", "内向", "幽默"]等）
+
+剧本标题：${scriptTitle}
+
+剧本内容：
+${scenesText}
+
+请直接返回JSON数组，不要其他内容。`
+
+  try {
+    const content = await callLLM(systemPrompt, userPrompt, config)
+    
+    const jsonMatch = content.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) {
+      throw new Error('AI返回的内容格式不正确')
+    }
+
+    const result = JSON.parse(jsonMatch[0])
+    
+    return result
+  } catch (error) {
+    console.error('提取角色失败:', error)
     throw error
   }
 }

@@ -10,6 +10,9 @@ export function createCharacter(data?: Partial<Character>): Character {
     personality: data?.personality || '',
     avatar: data?.avatar,
     traits: data?.traits || [],
+    referenceImages: data?.referenceImages || [],
+    appearanceNotes: data?.appearanceNotes || '',
+    clothingNotes: data?.clothingNotes || '',
     createdAt: new Date(),
     updatedAt: new Date(),
   }
