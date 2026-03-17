@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '../../context/AppContext'
 import {
   FileText,
@@ -19,6 +19,8 @@ import {
   Trash2,
   Save,
   BookOpen,
+  Undo2,
+  Redo2,
 } from 'lucide-react'
 import { CharacterManager } from '../CharacterManager'
 import { ScriptEditor } from '../ScriptEditor'
@@ -77,6 +79,11 @@ export function Layout() {
     exportData,
     importData,
     deleteScript,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    lastSaved,
   } = useApp()
   const [activeTab, setActiveTab] = useState<TabType>('script')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -88,6 +95,35 @@ export function Layout() {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
   const [testMessage, setTestMessage] = useState('')
   const [importError, setImportError] = useState('')
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault()
+      if (e.shiftKey) {
+        redo()
+      } else {
+        undo()
+      }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault()
+      redo()
+    }
+  }, [undo, redo])
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
+
+  const formatLastSaved = (date: Date | null) => {
+    if (!date) return ''
+    const now = new Date()
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+    if (diff < 60) return '刚刚保存'
+    if (diff < 3600) return `${Math.floor(diff / 60)}分钟前保存`
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  }
 
   const handleCreateScript = () => {
     if (newScriptTitle.trim()) {
@@ -314,6 +350,27 @@ export function Layout() {
               {tabs.find((t) => t.id === activeTab)?.label}
             </h1>
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={undo}
+                  disabled={!canUndo}
+                  title="撤销 (Ctrl+Z)"
+                  className="p-2 rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300"
+                >
+                  <Undo2 size={18} />
+                </button>
+                <button
+                  onClick={redo}
+                  disabled={!canRedo}
+                  title="重做 (Ctrl+Y)"
+                  className="p-2 rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300"
+                >
+                  <Redo2 size={18} />
+                </button>
+              </div>
+              {lastSaved && (
+                <span className="text-xs text-slate-500">{formatLastSaved(lastSaved)}</span>
+              )}
               {!apiKey && (
                 <span className="text-sm text-yellow-500">请先配置API密钥</span>
               )}
