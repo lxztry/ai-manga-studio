@@ -22,6 +22,24 @@ import {
 
 type ExportTab = 'static' | 'aivideo' | 'tts' | 'subtitles'
 
+const CAMERA_MOTIONS = [
+  { value: 'none', label: '静态' },
+  { value: 'zoom-in', label: '推近' },
+  { value: 'zoom-out', label: '拉远' },
+  { value: 'pan-left', label: '左移' },
+  { value: 'pan-right', label: '右移' },
+  { value: 'tilt-up', label: '上摇' },
+  { value: 'tilt-down', label: '下摇' },
+  { value: 'rotate', label: '旋转' },
+]
+
+const VIDEO_PRESETS = [
+  { id: 'portrait', name: '竖版 9:16', width: 720, height: 1280, desc: '抖音/快手' },
+  { id: 'landscape', name: '横版 16:9', width: 1920, height: 1080, desc: 'B站/YouTube' },
+  { id: 'square', name: '方形 1:1', width: 1080, height: 1080, desc: 'Instagram' },
+  { id: 'cinema', name: '电影 2.35:1', width: 1920, height: 817, desc: '宽银幕' },
+]
+
 export function MangaExporter() {
   const { currentScript, storyboard } = useApp()
   const [currentPage, setCurrentPage] = useState(0)
@@ -41,6 +59,9 @@ export function MangaExporter() {
   const [exportTab, setExportTab] = useState<ExportTab>('static')
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null)
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
+  const [videoPreset, setVideoPreset] = useState('portrait')
+  const [cameraMotion, setCameraMotion] = useState('none')
+  const [videoQueue, setVideoQueue] = useState<Array<{panelId: string, status: 'pending' | 'generating' | 'done' | 'failed', url?: string}>>([])
 
   const [ttsText, setTtsText] = useState('')
   const [ttsVoice, setTtsVoice] = useState('belle')
@@ -469,101 +490,149 @@ export function MangaExporter() {
       return
     }
 
-    const panelWithImage = panelsWithImages[0]
-    if (!panelWithImage?.imageUrl) {
+    const panelsWithImagesList = panelsWithImages.filter(p => p.imageUrl)
+    if (panelsWithImagesList.length === 0) {
       alert('请先上传至少一张分镜图片')
       return
     }
 
-    const prompt = panelWithImage.description || 'A beautiful anime scene'
-    
+    setVideoQueue(panelsWithImagesList.map(p => ({
+      panelId: p.id,
+      status: 'pending' as const,
+    })))
     setIsGeneratingVideo(true)
     setGeneratedVideoUrl(null)
 
-    try {
-      let imageBase64 = panelWithImage.imageUrl
-      if (!panelWithImage.imageUrl.startsWith('data:')) {
-        const response = await fetch(panelWithImage.imageUrl)
-        const blob = await response.blob()
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(blob)
-        })
-        imageBase64 = base64
-      }
-
-      const submitResponse = await fetch('https://api.siliconflow.cn/v1/video/submit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${siliconflowKey}`,
-        },
-        body: JSON.stringify({
-          model: 'Wan-AI/Wan2.2-I2V-A14B',
-          prompt: prompt.slice(0, 500),
-          image: imageBase64,
-        }),
-      })
-
-      if (!submitResponse.ok) {
-        const errorText = await submitResponse.text()
-        if (submitResponse.status === 401) {
-          throw new Error('API密钥无效')
-        }
-        throw new Error(`提交失败: ${errorText}`)
-      }
-
-      const data = await submitResponse.json()
-      const requestId = data.data?.request_id || data.request_id
-      if (!requestId) {
-        throw new Error('未能获取任务ID')
-      }
+    for (let i = 0; i < panelsWithImagesList.length; i++) {
+      const panel = panelsWithImagesList[i]
       
-      let attempts = 0
-      const maxAttempts = 60
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 3000))
+      setVideoQueue(prev => prev.map((item, idx) => 
+        idx === i ? { ...item, status: 'generating' } : item
+      ))
+      
+      try {
+        let prompt = panel.description || 'A beautiful anime scene'
         
-        const statusResponse = await fetch('https://api.siliconflow.cn/v1/video/status', {
+        if (cameraMotion !== 'none') {
+          const motionMap: Record<string, string> = {
+            'zoom-in': 'slowly zooming in',
+            'zoom-out': 'slowly zooming out',
+            'pan-left': 'slowly panning to the left',
+            'pan-right': 'slowly panning to the right',
+            'tilt-up': 'slowly tilting up',
+            'tilt-down': 'slowly tilting down',
+            'rotate': 'slowly rotating',
+          }
+          prompt += `, ${motionMap[cameraMotion] || ''}`
+        }
+
+        let imageBase64 = panel.imageUrl
+        if (imageBase64 && !imageBase64.startsWith('data:')) {
+          const response = await fetch(imageBase64)
+          const blob = await response.blob()
+          imageBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+        }
+
+        const submitResponse = await fetch('https://api.siliconflow.cn/v1/video/submit', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${siliconflowKey}`,
           },
-          body: JSON.stringify({ request_id: requestId }),
+          body: JSON.stringify({
+            model: 'Wan-AI/Wan2.2-I2V-A14B',
+            prompt: prompt.slice(0, 500),
+            image: imageBase64,
+          }),
         })
 
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json()
-          const status = statusData.data?.status || statusData.status
-          
-          if (status === 'SUCCEEDED') {
-            const videoUrl = statusData.data?.video?.url || statusData.data?.video_url
-            if (videoUrl) {
-              setGeneratedVideoUrl(videoUrl)
-              alert('视频生成成功！')
-              break
-            }
-          } else if (status === 'FAILED') {
-            throw new Error('视频生成失败')
-          }
+        if (!submitResponse.ok) {
+          const errorText = await submitResponse.text()
+          throw new Error(`提交失败: ${errorText}`)
+        }
+
+        const data = await submitResponse.json()
+        const requestId = data.data?.request_id || data.request_id
+        if (!requestId) {
+          throw new Error('未能获取任务ID')
         }
         
-        attempts++
-        setExportProgress(Math.round((attempts / maxAttempts) * 100))
-      }
+        let attempts = 0
+        const maxAttempts = 60
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          
+          const statusResponse = await fetch('https://api.siliconflow.cn/v1/video/status', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${siliconflowKey}`,
+            },
+            body: JSON.stringify({ request_id: requestId }),
+          })
 
-      if (!generatedVideoUrl && attempts >= maxAttempts) {
-        alert('视频生成超时，请稍后重试')
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            const status = statusData.data?.status || statusData.status
+            
+            if (status === 'SUCCEEDED') {
+              const videoUrl = statusData.data?.video?.url || statusData.data?.video_url
+              if (videoUrl) {
+                setVideoQueue(prev => prev.map((item, idx) => 
+                  idx === i ? { ...item, status: 'done', url: videoUrl } : item
+                ))
+                if (i === 0) {
+                  setGeneratedVideoUrl(videoUrl)
+                }
+                break
+              }
+            } else if (status === 'FAILED') {
+              throw new Error('视频生成失败')
+            }
+          }
+          
+          attempts++
+          setExportProgress(Math.round((attempts / maxAttempts) * 100))
+        }
+
+        setVideoQueue(prev => prev.map((item, idx) => 
+          idx === i && attempts >= maxAttempts ? { ...item, status: 'failed' } : item
+        ))
+      } catch (error) {
+        console.error('视频生成失败:', error)
+        setVideoQueue(prev => prev.map((item, idx) => 
+          idx === i ? { ...item, status: 'failed' } : item
+        ))
       }
-    } catch (error) {
-      console.error('AI视频生成失败:', error)
-      alert(error instanceof Error ? error.message : 'AI视频生成失败')
-    } finally {
-      setIsGeneratingVideo(false)
-      setExportProgress(0)
     }
+
+    setIsGeneratingVideo(false)
+    setExportProgress(0)
+    alert('视频生成完成！')
+  }
+
+  const handleDownloadVideo = (url: string, index: number) => {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `video-panel-${index + 1}.mp4`
+    a.click()
+  }
+
+  const handleDownloadAllVideos = () => {
+    const doneVideos = videoQueue.filter(v => v.status === 'done' && v.url)
+    if (doneVideos.length === 0) {
+      alert('没有可下载的视频')
+      return
+    }
+    doneVideos.forEach((v, i) => {
+      if (v.url) {
+        setTimeout(() => handleDownloadVideo(v.url!, i), i * 500)
+      }
+    })
   }
 
   const handleGenerateTTS = async () => {
@@ -848,9 +917,79 @@ export function MangaExporter() {
               <div className="space-y-4">
                 <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
                   <p className="text-sm text-blue-300">
-                    使用AI将分镜图片转换为动态视频。目前支持图生视频功能。
+                    使用AI将分镜图片转换为动态视频。支持批量生成和运镜控制。
                   </p>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">运镜方式</label>
+                    <select
+                      className="select"
+                      value={cameraMotion}
+                      onChange={(e) => setCameraMotion(e.target.value)}
+                      disabled={isGeneratingVideo}
+                    >
+                      {CAMERA_MOTIONS.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">视频尺寸</label>
+                    <select
+                      className="select"
+                      value={videoPreset}
+                      onChange={(e) => setVideoPreset(e.target.value)}
+                      disabled={isGeneratingVideo}
+                    >
+                      {VIDEO_PRESETS.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.desc})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {videoQueue.length > 0 && (
+                  <div className="bg-slate-800 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">生成队列 ({videoQueue.length}个)</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleDownloadAllVideos}
+                          disabled={!videoQueue.some(v => v.status === 'done')}
+                          className="btn btn-secondary text-xs"
+                        >
+                          下载全部
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-auto">
+                      {videoQueue.map((item, idx) => (
+                          <div key={item.panelId} className="flex items-center gap-3 p-2 bg-slate-700 rounded">
+                            <span className="text-xs text-slate-400 w-6">#{idx + 1}</span>
+                            {item.status === 'done' && item.url ? (
+                              <>
+                                <video src={item.url} className="w-12 h-8 object-cover rounded" />
+                                <button
+                                  onClick={() => handleDownloadVideo(item.url!, idx)}
+                                  className="ml-auto text-primary-400 hover:text-primary-300"
+                                >
+                                  <Download size={14} />
+                                </button>
+                              </>
+                            ) : item.status === 'generating' ? (
+                              <Loader2 size={14} className="animate-spin text-primary-400" />
+                            ) : item.status === 'failed' ? (
+                              <X size={14} className="text-red-400" />
+                            ) : (
+                              <span className="text-xs text-slate-500">等待中</span>
+                            )}
+                          </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {generatedVideoUrl ? (
                   <div className="space-y-3">
@@ -882,7 +1021,7 @@ export function MangaExporter() {
                     ) : (
                       <>
                         <Sparkles size={18} />
-                        生成AI视频
+                        批量生成AI视频 ({panelsWithImages.length}个)
                       </>
                     )}
                   </button>
