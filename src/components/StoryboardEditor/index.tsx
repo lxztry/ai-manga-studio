@@ -1,8 +1,13 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
-import { Plus, Grid, Trash2, ChevronUp, ChevronDown, Image, Wand2, Upload, X, Sparkles } from 'lucide-react'
+import { Plus, Grid, Trash2, ChevronUp, ChevronDown, Image, Wand2, Upload, X, Sparkles, Info } from 'lucide-react'
 import type { StoryboardPanel } from '../../types'
 import { generateImagePrompt } from '../../utils'
+import { 
+  CharacterMemory, 
+  createCharacterMemory, 
+  updateCharacterMemory, 
+} from '../../utils/memory'
 
 const CAMERA_ANGLES = [
   { value: 'close-up', label: '特写' },
@@ -25,7 +30,42 @@ export function StoryboardEditor() {
   const [selectedPanel, setSelectedPanel] = useState<string | null>(null)
   const [generatingPanelId, setGeneratingPanelId] = useState<string | null>(null)
   const [selectedSceneId, setSelectedSceneId] = useState<string>('')
+  const [characterMemories, setCharacterMemories] = useState<Map<string, CharacterMemory>>(new Map())
+  const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const newMemories = new Map<string, CharacterMemory>()
+    for (const char of characters) {
+      const existing = characterMemories.get(char.id)
+      if (existing) {
+        newMemories.set(char.id, existing)
+      } else {
+        newMemories.set(char.id, createCharacterMemory(char))
+      }
+    }
+    setCharacterMemories(newMemories)
+  }, [characters])
+
+  useEffect(() => {
+    if (storyboard?.panels) {
+      const newMemories = new Map(characterMemories)
+      for (const panel of storyboard.panels) {
+        if (panel.imageUrl && panel.description) {
+          for (const char of characters) {
+            const charInPanel = panel.description.toLowerCase().includes(char.name.toLowerCase())
+            if (charInPanel) {
+              const memory = newMemories.get(char.id)
+              if (memory) {
+                newMemories.set(char.id, updateCharacterMemory(memory, panel, panel.description))
+              }
+            }
+          }
+        }
+      }
+      setCharacterMemories(newMemories)
+    }
+  }, [storyboard?.panels])
 
   const filteredPanels = selectedSceneId
     ? storyboard?.panels.filter(p => p.sceneId === selectedSceneId) || []
@@ -204,6 +244,14 @@ export function StoryboardEditor() {
           )}
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowMemoryPanel(!showMemoryPanel)}
+            className={`btn flex items-center gap-2 ${showMemoryPanel ? 'btn-primary' : 'btn-secondary'}`}
+            title="角色出场记录"
+          >
+            <Info size={18} />
+            记忆
+          </button>
           {currentScript && currentScript.scenes.length > 0 && (
             <button
               onClick={() => {
@@ -270,6 +318,54 @@ export function StoryboardEditor() {
           </button>
         </div>
       </div>
+
+      {showMemoryPanel && characters.length > 0 && (
+        <div className="mb-4 p-4 bg-slate-800 rounded-lg">
+          <h4 className="font-medium mb-3 flex items-center gap-2">
+            <Info size={16} className="text-primary-400" />
+            角色出场记录
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {characters.map(char => {
+              const memory = characterMemories.get(char.id)
+              return (
+                <div key={char.id} className="bg-slate-700/50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    {char.avatar ? (
+                      <img src={char.avatar} alt={char.name} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center text-xs">
+                        {char.name[0]}
+                      </div>
+                    )}
+                    <span className="font-medium">{char.name}</span>
+                    <span className="text-xs text-slate-500">
+                      出场 {memory?.appearanceCount || 0} 次
+                    </span>
+                  </div>
+                  {memory?.lastAppearance && (
+                    <div className="text-xs text-slate-400 space-y-1">
+                      <p className="truncate">
+                        上次: {memory.lastAppearance.description.slice(0, 50)}...
+                      </p>
+                      {memory.clothingHistory.length > 0 && (
+                        <p className="truncate">
+                          服装: {memory.clothingHistory[memory.clothingHistory.length - 1]}
+                        </p>
+                      )}
+                      {memory.poseHistory.length > 0 && (
+                        <p className="truncate">
+                          姿势: {memory.poseHistory[memory.poseHistory.length - 1]}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredPanels.map((panel, index) => (
