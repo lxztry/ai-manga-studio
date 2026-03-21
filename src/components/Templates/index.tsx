@@ -205,32 +205,36 @@ export function Templates() {
       return
     }
 
-    if (!apiKey) {
-      alert('请先在设置中配置API密钥')
-      return
-    }
-
     setImportStep('generating')
     setImportProgress(10)
     setErrorMessage(null)
 
     try {
       setImportProgress(30)
-      const result = await importTextToScript(novelText, {
-        apiKey,
-        provider: apiProvider,
-        model: apiModel,
-        baseUrl: apiBaseUrl,
-      })
+      
+      const config = {
+        apiKey: apiKey || 'free-tier',
+        provider: apiKey ? apiProvider : 'openrouter' as const,
+        model: apiKey ? apiModel : 'anthropic/claude-3-haiku',
+        baseUrl: apiKey ? apiBaseUrl : '',
+      }
+      
+      const result = await importTextToScript(novelText, config)
 
       setParsedContent(result as unknown as ParsedContent)
       setImportProgress(60)
 
       if (result.scenes && result.scenes.length > 0) {
+        const config = {
+          apiKey: apiKey || 'free-tier',
+          provider: apiKey ? apiProvider : 'openrouter' as const,
+          model: apiKey ? apiModel : 'anthropic/claude-3-haiku',
+          baseUrl: apiKey ? apiBaseUrl : '',
+        }
         const extracted = await extractCharactersFromScript(
           result.title || '未命名',
           result.scenes as unknown as Scene[],
-          { apiKey, provider: apiProvider, model: apiModel, baseUrl: apiBaseUrl }
+          config
         )
         setExtractedCharacters(extracted as unknown as Character[])
       }
@@ -455,11 +459,11 @@ export function Templates() {
                 </span>
                 <button
                   onClick={handleParseNovel}
-                  disabled={!novelText.trim() || !apiKey}
+                  disabled={!novelText.trim()}
                   className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
                 >
                   <Wand2 size={16} />
-                  AI解析剧情
+                  AI解析剧情 {apiKey ? '' : '(免费)'}
                 </button>
               </div>
             </div>

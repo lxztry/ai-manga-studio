@@ -23,25 +23,20 @@ async function callLLM(
   userPrompt: string,
   config: AIConfig
 ): Promise<string> {
-  if (!config.apiKey) {
-    throw new Error('请在设置中配置API密钥')
-  }
-
   let url: string
   let headers: Record<string, string>
   let model: string
 
-  switch (config.provider) {
-    case 'openai':
-      url = 'https://api.openai.com/v1/chat/completions'
+  if (!config.apiKey || config.apiKey === 'free-tier') {
+    const siliconflowKey = localStorage.getItem('siliconflow-api-key')
+    if (siliconflowKey) {
+      url = 'https://api.siliconflow.cn/v1/chat/completions'
       headers = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        'Authorization': `Bearer ${siliconflowKey}`,
       }
-      model = config.model || 'gpt-4'
-      break
-
-    case 'openrouter':
+      model = 'deepseek-ai/DeepSeek-V2.5'
+    } else {
       url = `${OPENROUTER_BASE_URL}/chat/completions`
       headers = {
         'Content-Type': 'application/json',
@@ -49,30 +44,52 @@ async function callLLM(
         'HTTP-Referer': window.location.origin || 'http://localhost:3000',
         'X-Title': 'AI Manga Studio',
       }
-      model = config.model || 'openai/gpt-4'
-      break
+      model = 'free'
+    }
+  } else {
+    switch (config.provider) {
+      case 'openai':
+        url = 'https://api.openai.com/v1/chat/completions'
+        headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+        }
+        model = config.model || 'gpt-4'
+        break
 
-    case 'anthropic':
-      url = 'https://api.anthropic.com/v1/messages'
-      headers = {
-        'Content-Type': 'application/json',
-        'x-api-key': config.apiKey,
-        'anthropic-version': '2023-06-01',
-      }
-      model = config.model || 'claude-3-sonnet-20240229'
-      break
+      case 'openrouter':
+        url = `${OPENROUTER_BASE_URL}/chat/completions`
+        headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+          'HTTP-Referer': window.location.origin || 'http://localhost:3000',
+          'X-Title': 'AI Manga Studio',
+        }
+        model = config.model || 'openai/gpt-4'
+        break
 
-    case 'local':
-      url = config.baseUrl || 'http://localhost:11434/v1/chat/completions'
-      headers = { 'Content-Type': 'application/json' }
-      model = config.model || 'llama2'
-      break
+      case 'anthropic':
+        url = 'https://api.anthropic.com/v1/messages'
+        headers = {
+          'Content-Type': 'application/json',
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01',
+        }
+        model = config.model || 'claude-3-sonnet-20240229'
+        break
 
-    default:
-      throw new Error(`不支持的API提供商: ${config.provider}`)
+      case 'local':
+        url = config.baseUrl || 'http://localhost:11434/v1/chat/completions'
+        headers = { 'Content-Type': 'application/json' }
+        model = config.model || 'llama2'
+        break
+
+      default:
+        throw new Error(`不支持的API提供商: ${config.provider}`)
+    }
   }
 
-  const isAnthropic = config.provider === 'anthropic'
+  const isAnthropic = config.provider === 'anthropic' && config.apiKey && config.apiKey !== 'free-tier'
   
   const body = isAnthropic
     ? {
@@ -85,8 +102,7 @@ async function callLLM(
         model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
+          { role: 'user', content: userPrompt }],
         temperature: 0.8,
       }
 
