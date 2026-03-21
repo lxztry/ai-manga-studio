@@ -142,6 +142,9 @@ export function Layout() {
     setApiProvider(provider)
     const defaultModel = PROVIDER_MODELS[provider]?.[0]?.id || ''
     setApiModel(defaultModel)
+    if (provider === 'local' && !apiBaseUrl) {
+      setApiBaseUrl('http://localhost:11434/v1')
+    }
   }
 
   const handleModelChange = (model: string) => {
@@ -213,10 +216,10 @@ export function Layout() {
           break
 
         case 'local':
-          url = apiBaseUrl || 'http://localhost:11434/v1/chat/completions'
+          url = (apiBaseUrl || 'http://localhost:11434') + '/v1/chat/completions'
           headers = { 'Content-Type': 'application/json' }
           body = {
-            model: model || 'llama2',
+            model: model || 'qwen3.5:0.8b',
             messages: [{ role: 'user', content: 'Hi' }],
             max_tokens: 5,
           }
