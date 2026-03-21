@@ -55,9 +55,14 @@ const PROVIDER_MODELS: Record<string, { id: string; name: string }[]> = {
   ],
   openrouter: POPULAR_OPENROUTER_MODELS,
   local: [
+    { id: 'qwen3.5:0.8b', name: 'Qwen 3.5 (0.8B)' },
+    { id: 'qwen2.5:3b', name: 'Qwen 2.5 (3B)' },
+    { id: 'qwen2.5:7b', name: 'Qwen 2.5 (7B)' },
     { id: 'llama2', name: 'Llama 2' },
+    { id: 'llama3', name: 'Llama 3' },
     { id: 'mistral', name: 'Mistral' },
     { id: 'codellama', name: 'Code Llama' },
+    { id: 'deepseek-r1', name: 'DeepSeek R1' },
   ],
 }
 
@@ -148,7 +153,7 @@ export function Layout() {
   }
 
   const handleTestConnection = async () => {
-    if (!apiKey) {
+    if (!apiKey && apiProvider !== 'local') {
       setTestStatus('error')
       setTestMessage('请输入API密钥')
       return
@@ -436,6 +441,27 @@ export function Layout() {
                   />
                   <p className="text-xs text-slate-500 mt-1">
                     查看所有模型: <a href="https://openrouter.ai/models" target="_blank" rel="noopener" className="text-primary-400 hover:underline">openrouter.ai/models</a>
+                  </p>
+                </div>
+              )}
+
+              {apiProvider === 'local' && (
+                <div>
+                  <label className="label">自定义模型名称 (可选)</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={customModel}
+                    onChange={(e) => {
+                      setCustomModel(e.target.value)
+                      if (e.target.value) {
+                        setApiModel(e.target.value)
+                      }
+                    }}
+                    placeholder="例如: qwen3.5:0.8b"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    查看已下载模型: <code className="bg-slate-700 px-1 rounded">ollama list</code>
                   </p>
                 </div>
               )}
