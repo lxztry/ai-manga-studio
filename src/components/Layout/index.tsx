@@ -216,7 +216,10 @@ export function Layout() {
           break
 
         case 'local':
-          url = (apiBaseUrl || 'http://localhost:11434') + '/v1/chat/completions'
+          const localBaseUrl = apiBaseUrl?.trim() || 'http://localhost:11434'
+          const finalUrl = localBaseUrl.endsWith('/v1') ? localBaseUrl : localBaseUrl + '/v1'
+          url = finalUrl + '/chat/completions'
+          console.log('Local API URL:', url, 'Model:', model)
           headers = { 'Content-Type': 'application/json' }
           body = {
             model: model || 'qwen3.5:0.8b',
