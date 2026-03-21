@@ -27,16 +27,25 @@ async function callLLM(
   let headers: Record<string, string>
   let model: string
 
-  if (!config.apiKey || config.apiKey === 'free-tier') {
-    const siliconflowKey = localStorage.getItem('siliconflow-api-key')
-    if (siliconflowKey) {
-      url = 'https://api.siliconflow.cn/v1/chat/completions'
+  switch (config.provider) {
+    case 'local':
+      const localBase = config.baseUrl?.trim() || 'http://localhost:11434'
+      const localUrl = localBase.endsWith('/v1') ? localBase : localBase + '/v1'
+      url = localUrl + '/chat/completions'
+      headers = { 'Content-Type': 'application/json' }
+      model = config.model || 'qwen3.5:0.8b'
+      break
+
+    case 'openai':
+      url = 'https://api.openai.com/v1/chat/completions'
       headers = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${siliconflowKey}`,
+        'Authorization': `Bearer ${config.apiKey}`,
       }
-      model = 'deepseek-ai/DeepSeek-V2.5'
-    } else {
+      model = config.model || 'gpt-4'
+      break
+
+    case 'openrouter':
       url = `${OPENROUTER_BASE_URL}/chat/completions`
       headers = {
         'Content-Type': 'application/json',
@@ -44,52 +53,45 @@ async function callLLM(
         'HTTP-Referer': window.location.origin || 'http://localhost:3000',
         'X-Title': 'AI Manga Studio',
       }
-      model = 'free'
-    }
-  } else {
-    switch (config.provider) {
-      case 'openai':
-        url = 'https://api.openai.com/v1/chat/completions'
-        headers = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
+      model = config.model || 'openai/gpt-4'
+      break
+
+    case 'anthropic':
+      url = 'https://api.anthropic.com/v1/messages'
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey || '',
+        'anthropic-version': '2023-06-01',
+      }
+      model = config.model || 'claude-3-sonnet-20240229'
+      break
+
+    default:
+      if (!config.apiKey || config.apiKey === 'free-tier') {
+        const siliconflowKey = localStorage.getItem('siliconflow-api-key')
+        if (siliconflowKey) {
+          url = 'https://api.siliconflow.cn/v1/chat/completions'
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${siliconflowKey}`,
+          }
+          model = 'deepseek-ai/DeepSeek-V2.5'
+        } else {
+          url = `${OPENROUTER_BASE_URL}/chat/completions`
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey || ''}`,
+            'HTTP-Referer': window.location.origin || 'http://localhost:3000',
+            'X-Title': 'AI Manga Studio',
+          }
+          model = 'free'
         }
-        model = config.model || 'gpt-4'
-        break
-
-      case 'openrouter':
-        url = `${OPENROUTER_BASE_URL}/chat/completions`
-        headers = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-          'HTTP-Referer': window.location.origin || 'http://localhost:3000',
-          'X-Title': 'AI Manga Studio',
-        }
-        model = config.model || 'openai/gpt-4'
-        break
-
-      case 'anthropic':
-        url = 'https://api.anthropic.com/v1/messages'
-        headers = {
-          'Content-Type': 'application/json',
-          'x-api-key': config.apiKey,
-          'anthropic-version': '2023-06-01',
-        }
-        model = config.model || 'claude-3-sonnet-20240229'
-        break
-
-      case 'local':
-        url = config.baseUrl || 'http://localhost:11434/v1/chat/completions'
-        headers = { 'Content-Type': 'application/json' }
-        model = config.model || 'llama2'
-        break
-
-      default:
+      } else {
         throw new Error(`不支持的API提供商: ${config.provider}`)
-    }
+      }
   }
 
-  const isAnthropic = config.provider === 'anthropic' && config.apiKey && config.apiKey !== 'free-tier'
+  const isAnthropic = config.provider === 'anthropic'
   
   const body = isAnthropic
     ? {

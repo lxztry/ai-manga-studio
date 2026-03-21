@@ -213,10 +213,10 @@ export function Templates() {
       setImportProgress(30)
       
       const config = {
-        apiKey: apiKey || 'free-tier',
-        provider: apiKey ? apiProvider : 'openrouter' as const,
-        model: apiKey ? apiModel : 'anthropic/claude-3-haiku',
-        baseUrl: apiKey ? apiBaseUrl : '',
+        apiKey: apiKey,
+        provider: apiProvider,
+        model: apiModel,
+        baseUrl: apiBaseUrl,
       }
       
       const result = await importTextToScript(novelText, config)
@@ -225,12 +225,6 @@ export function Templates() {
       setImportProgress(60)
 
       if (result.scenes && result.scenes.length > 0) {
-        const config = {
-          apiKey: apiKey || 'free-tier',
-          provider: apiKey ? apiProvider : 'openrouter' as const,
-          model: apiKey ? apiModel : 'anthropic/claude-3-haiku',
-          baseUrl: apiKey ? apiBaseUrl : '',
-        }
         const extracted = await extractCharactersFromScript(
           result.title || '未命名',
           result.scenes as unknown as Scene[],
