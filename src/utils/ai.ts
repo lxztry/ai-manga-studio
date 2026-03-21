@@ -337,15 +337,26 @@ ${text.slice(0, 5000)}`
 
   try {
     const content = await callLLM(systemPrompt, userPrompt, config)
+    console.log('AI返回内容:', content.slice(0, 500))
     
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('AI返回的内容格式不正确')
+    let jsonStr = content
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1]
+    } else {
+      const jsonMatch = content.match(/(\{[\s\S]*\}|\[[\s\S]*\]\})/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1]
+      }
     }
 
-    const result = JSON.parse(jsonMatch[0])
-    
-    return result
+    try {
+      const result = JSON.parse(jsonStr)
+      return result
+    } catch (parseError) {
+      console.error('JSON解析失败:', parseError, '\n内容:', jsonStr.slice(0, 200))
+      throw new Error('AI返回的内容格式不正确，无法解析为JSON')
+    }
   } catch (error) {
     console.error('导入文本失败:', error)
     throw error
@@ -389,14 +400,23 @@ ${scenesText}
   try {
     const content = await callLLM(systemPrompt, userPrompt, config)
     
-    const jsonMatch = content.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
-      throw new Error('AI返回的内容格式不正确')
+    let jsonStr = content
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1]
+    } else {
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
+      }
     }
 
-    const result = JSON.parse(jsonMatch[0])
-    
-    return result
+    try {
+      const result = JSON.parse(jsonStr)
+      return result
+    } catch {
+      throw new Error('AI返回的内容格式不正确，无法解析为JSON数组')
+    }
   } catch (error) {
     console.error('提取角色失败:', error)
     throw error
