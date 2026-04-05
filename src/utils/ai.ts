@@ -110,21 +110,47 @@ async function callLLM(
   }
 
   const isAnthropic = config.provider === 'anthropic'
+  const isMiniMax = config.provider === 'minimax'
+  const isGLM = config.provider === 'glm'
   
-  const body = isAnthropic
-    ? {
-        model,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }
-    : {
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }],
-        temperature: 0.8,
-      }
+  let body: object
+  
+  if (isAnthropic) {
+    body = {
+      model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }
+  } else if (isMiniMax) {
+    body = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 4096,
+      temperature: 0.8,
+    }
+  } else if (isGLM) {
+    body = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 4096,
+      temperature: 0.8,
+    }
+  } else {
+    body = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }],
+      temperature: 0.8,
+    }
+  }
 
   let response: Response
   try {
@@ -172,6 +198,20 @@ async function callLLM(
     return data.content[0].text
   }
   
+  if (isMiniMax) {
+    if (!data.choices || !data.choices[0]?.message?.content) {
+      throw new Error('API返回格式异常')
+    }
+    return data.choices[0].message.content
+  }
+  
+  if (isGLM) {
+    if (!data.choices || !data.choices[0]?.message?.content) {
+      throw new Error('API返回格式异常')
+    }
+    return data.choices[0].message.content
+  }
+  
   if (!data.choices || !data.choices[0]) {
     throw new Error('API返回格式异常')
   }
@@ -208,12 +248,23 @@ export async function generateScript(
 
   try {
     const content = await callLLM(systemPrompt, prompt, config)
+    console.log('AI返回内容:', content)
     
-    let jsonStr = content
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0]
+    let jsonStr = content.trim()
+    
+    // 移除 markdown 代码块
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim()
+    } else {
+      const jsonMatch = jsonStr.match(/(\{[\s\S]*\})/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1]
+      }
     }
+    
+    // 移除可能的 markdown 标记
+    jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/```$/, '').trim()
     
     const result = JSON.parse(jsonStr)
     
@@ -247,11 +298,20 @@ ${characterInfo}
 
   try {
     const content = await callLLM(systemPrompt, context, config)
-    const jsonMatch = content.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
+    console.log('AI返回内容:', content)
+    
+    let jsonStr = content.trim()
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim()
+    } else {
+      const jsonMatch = jsonStr.match(/(\[[\s\S]*\])/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1]
+      }
     }
-    return JSON.parse(content)
+    
+    return JSON.parse(jsonStr)
   } catch (error) {
     console.error('生成对话失败:', error)
     throw error
@@ -269,11 +329,20 @@ export async function generateSceneDescription(
 
   try {
     const content = await callLLM(systemPrompt, context, config)
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
+    console.log('AI返回内容:', content)
+    
+    let jsonStr = content.trim()
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim()
+    } else {
+      const jsonMatch = jsonStr.match(/(\{[\s\S]*\})/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1]
+      }
     }
-    return JSON.parse(content)
+    
+    return JSON.parse(jsonStr)
   } catch (error) {
     console.error('生成场景描述失败:', error)
     throw error
@@ -303,9 +372,17 @@ export async function optimizeVideoPrompt(
 
   try {
     const content = await callLLM(systemPrompt, prompt, config)
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    console.log('AI返回内容:', content)
+    
+    let jsonStr = content.trim()
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      return codeBlockMatch[1].trim()
+    }
+    
+    const jsonMatch = jsonStr.match(/(\{[\s\S]*\})/)
     if (jsonMatch) {
-      return jsonMatch[0]
+      return jsonMatch[1]
     }
     return content
   } catch (error) {
@@ -355,25 +432,31 @@ ${text.slice(0, 5000)}`
 
   try {
     const content = await callLLM(systemPrompt, userPrompt, config)
-    console.log('AI返回内容:', content.slice(0, 500))
+    console.log('AI返回内容:', content)
     
-    let jsonStr = content
-    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
+    let jsonStr = content.trim()
+    
+    // 移除 markdown 代码块
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
     if (codeBlockMatch) {
-      jsonStr = codeBlockMatch[1]
+      jsonStr = codeBlockMatch[1].trim()
     } else {
-      const jsonMatch = content.match(/(\{[\s\S]*\}|\[[\s\S]*\]\})/)
+      // 尝试找到 JSON 对象或数组
+      const jsonMatch = jsonStr.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
       if (jsonMatch) {
         jsonStr = jsonMatch[1]
       }
     }
 
+    // 移除可能的 markdown 标记
+    jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/```$/, '').trim()
+
     try {
       const result = JSON.parse(jsonStr)
       return result
     } catch (parseError) {
-      console.error('JSON解析失败:', parseError, '\n内容:', jsonStr.slice(0, 200))
-      throw new Error('AI返回的内容格式不正确，无法解析为JSON')
+      console.error('JSON解析失败:', parseError, '\n内容:', jsonStr.slice(0, 500))
+      throw new Error('AI返回的内容格式不正确，无法解析为JSON: ' + jsonStr.slice(0, 200))
     }
   } catch (error) {
     console.error('导入文本失败:', error)
@@ -417,15 +500,16 @@ ${scenesText}
 
   try {
     const content = await callLLM(systemPrompt, userPrompt, config)
+    console.log('AI返回内容:', content)
     
-    let jsonStr = content
+    let jsonStr = content.trim()
     const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
     if (codeBlockMatch) {
-      jsonStr = codeBlockMatch[1]
+      jsonStr = codeBlockMatch[1].trim()
     } else {
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      const jsonMatch = content.match(/(\[[\s\S]*\])/)
       if (jsonMatch) {
-        jsonStr = jsonMatch[0]
+        jsonStr = jsonMatch[1]
       }
     }
 
@@ -433,6 +517,7 @@ ${scenesText}
       const result = JSON.parse(jsonStr)
       return result
     } catch {
+      console.error('JSON解析失败:', jsonStr.slice(0, 200))
       throw new Error('AI返回的内容格式不正确，无法解析为JSON数组')
     }
   } catch (error) {
