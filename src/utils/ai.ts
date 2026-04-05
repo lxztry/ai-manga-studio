@@ -66,6 +66,24 @@ async function callLLM(
       model = config.model || 'claude-3-sonnet-20240229'
       break
 
+    case 'minimax':
+      url = 'https://api.minimax.chat/v1/text/chatcompletion_v2'
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      }
+      model = config.model || 'MiniMax-M2.7'
+      break
+
+    case 'glm':
+      url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      }
+      model = config.model || 'glm-4-flash'
+      break
+
     default:
       if (!config.apiKey || config.apiKey === 'free-tier') {
         const siliconflowKey = localStorage.getItem('siliconflow-api-key')

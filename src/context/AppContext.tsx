@@ -13,7 +13,7 @@ interface AppState {
   currentScene: Scene | null
   storyboard: Storyboard | null
   apiKey: string
-  apiProvider: 'openai' | 'anthropic' | 'openrouter' | 'local'
+  apiProvider: 'openai' | 'anthropic' | 'openrouter' | 'local' | 'minimax' | 'glm'
   apiModel: string
   apiBaseUrl: string
 }
@@ -27,7 +27,7 @@ interface History {
 
 interface AppContextType extends AppState {
   setApiKey: (key: string) => void
-  setApiProvider: (provider: 'openai' | 'anthropic' | 'openrouter' | 'local') => void
+  setApiProvider: (provider: 'openai' | 'anthropic' | 'openrouter' | 'local' | 'minimax' | 'glm') => void
   setApiModel: (model: string) => void
   setApiBaseUrl: (url: string) => void
   createNewScript: (title: string) => void
@@ -190,7 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, apiKey: key }))
   }, [])
 
-  const setApiProvider = useCallback((provider: 'openai' | 'anthropic' | 'openrouter' | 'local') => {
+  const setApiProvider = useCallback((provider: 'openai' | 'anthropic' | 'openrouter' | 'local' | 'minimax' | 'glm') => {
     setState(prev => ({ ...prev, apiProvider: provider }))
   }, [])
 

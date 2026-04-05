@@ -53,6 +53,18 @@ const PROVIDER_MODELS: Record<string, { id: string; name: string }[]> = {
     { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet' },
     { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku' },
   ],
+  minimax: [
+    { id: 'MiniMax-M2.7', name: 'M2.7 (推荐)' },
+    { id: 'abab6.5s-chat', name: 'ABAB 6.5s' },
+    { id: 'abab6-chat', name: 'ABAB 6' },
+    { id: 'abab5.5s-chat', name: 'ABAB 5.5s' },
+  ],
+  glm: [
+    { id: 'glm-4-flash', name: 'GLM-4 Flash (推荐)' },
+    { id: 'glm-4', name: 'GLM-4' },
+    { id: 'glm-4-plus', name: 'GLM-4 Plus' },
+    { id: 'glm-3-turbo', name: 'GLM-3-Turbo' },
+  ],
   openrouter: POPULAR_OPENROUTER_MODELS,
   local: [
     { id: 'qwen3.5:0.8b', name: 'Qwen 3.5 (0.8B)' },
@@ -223,6 +235,32 @@ export function Layout() {
           headers = { 'Content-Type': 'application/json' }
           body = {
             model: model || 'qwen3.5:0.8b',
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 5,
+          }
+          break
+
+        case 'minimax':
+          url = 'https://api.minimax.chat/v1/text/chatcompletion_v2'
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          }
+          body = {
+            model: model || 'MiniMax-M2.7',
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 5,
+          }
+          break
+
+        case 'glm':
+          url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          }
+          body = {
+            model: model || 'glm-4-flash',
             messages: [{ role: 'user', content: 'Hi' }],
             max_tokens: 5,
           }
@@ -412,6 +450,8 @@ export function Layout() {
                   <option value="openrouter">OpenRouter (推荐)</option>
                   <option value="openai">OpenAI</option>
                   <option value="anthropic">Anthropic</option>
+                  <option value="minimax">MiniMax</option>
+                  <option value="glm">GLM (智谱)</option>
                   <option value="local">本地模型</option>
                 </select>
               </div>
@@ -561,6 +601,20 @@ export function Layout() {
                   {apiProvider === 'anthropic' && (
                     <>
                       <strong className="text-slate-300">Anthropic</strong> - Claude系列模型。
+                    </>
+                  )}
+                  {apiProvider === 'minimax' && (
+                    <>
+                      <strong className="text-slate-300">MiniMax</strong> - 国产大模型，支持长文本处理。
+                      <br />
+                      获取密钥: <a href="https://platform.minimax.com" target="_blank" rel="noopener" className="text-primary-400 hover:underline">platform.minimax.com</a>
+                    </>
+                  )}
+                  {apiProvider === 'glm' && (
+                    <>
+                      <strong className="text-slate-300">GLM (智谱)</strong> - 清华智谱AI推出的GLM系列模型。
+                      <br />
+                      获取密钥: <a href="https://open.bigmodel.cn" target="_blank" rel="noopener" className="text-primary-400 hover:underline">open.bigmodel.cn</a>
                     </>
                   )}
                   {apiProvider === 'local' && (
